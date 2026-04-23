@@ -1,0 +1,25 @@
+# SQL Server backup files
+*.bak
+*.mdf
+*.ldf
+
+# SSMS temp files
+*.suo
+.vs/
+
+# Azure Data Studio workspace settings
+*.code-workspace
+
+# Environment / credential files
+.env
+*.env
+secrets.json
+credentials.json
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Log files
+*.log

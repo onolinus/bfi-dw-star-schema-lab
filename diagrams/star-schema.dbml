@@ -1,0 +1,195 @@
+// =============================================================================
+// BFI Finance DW Star Schema — DBML Diagram Source
+// Paste this file at https://dbdiagram.io to generate the schema diagram
+// Compatible with: dbdiagram.io, dbdocs.io
+// =============================================================================
+
+Table dw.dim_date {
+  date_sk             int         [pk, note: "YYYYMMDD integer"]
+  full_date           date        [not null]
+  day_of_month        int
+  day_name_id         varchar(10) [note: "Senin..Minggu"]
+  month_number        int
+  month_name_id       varchar(12) [note: "Januari..Desember"]
+  month_year          char(7)     [note: "2024-01"]
+  quarter_number      int
+  quarter_name        varchar(8)
+  year_number         int
+  fiscal_year         int
+  is_weekday          boolean
+  is_holiday          boolean
+  holiday_name        varchar(100)
+  year_month_int      int
+
+  Note: "Static date dimension, pre-populated 2015–2030"
+}
+
+Table dw.dim_customer {
+  customer_sk         int         [pk, increment]
+  customer_bk         varchar(20) [not null, note: "Source CRM ID"]
+  nik                 char(16)
+  full_name           varchar(150) [not null]
+  date_of_birth       date
+  gender              char(1)
+  marital_status      varchar(20) [note: "SCD2: LAJANG/MENIKAH/CERAI"]
+  address_line1       varchar(200) [note: "SCD2 tracked"]
+  kelurahan           varchar(100) [note: "SCD2 tracked"]
+  kecamatan           varchar(100)
+  kota_kabupaten      varchar(100) [note: "SCD2 tracked"]
+  provinsi            varchar(100) [note: "SCD2 tracked"]
+  kode_pos            varchar(10)
+  phone_mobile        varchar(20)  [note: "SCD1 - overwrite only"]
+  email               varchar(150) [note: "SCD1 - overwrite only"]
+  income_monthly      decimal(18,2) [note: "SCD2 tracked"]
+  income_bracket      varchar(20)  [note: "SCD2: LOW/MIDDLE/UPPER"]
+  occupation          varchar(100)
+  employer_name       varchar(150)
+  risk_rating         varchar(10)  [note: "SCD2: A/B/C/D"]
+  is_blacklisted      boolean
+  effective_from      date         [not null, note: "SCD2 start date"]
+  effective_to        date         [not null, note: "9999-12-31 = current"]
+  is_current          boolean      [not null]
+  dw_created_at       datetime
+  dw_updated_at       datetime
+
+  indexes {
+    (customer_bk, is_current) [name: "IX_customer_bk_current"]
+  }
+
+  Note: "SCD Type 2 — address, income bracket, risk rating tracked historically"
+}
+
+Table dw.dim_product {
+  product_sk          int         [pk, increment]
+  product_bk          varchar(20) [unique, not null]
+  product_code        varchar(20)
+  product_name        varchar(150) [not null]
+  product_category    varchar(50)  [note: "MOTOR_VEHICLE/HEAVY_EQUIPMENT/PROPERTY/CONSUMER"]
+  product_subcategory varchar(50)
+  min_loan_amount     decimal(18,2)
+  max_loan_amount     decimal(18,2)
+  min_tenor_months    int
+  max_tenor_months    int
+  base_interest_rate  decimal(8,4) [note: "Annual %; SCD1 - overwrite on rate change"]
+  admin_fee_pct       decimal(8,4)
+  insurance_required  boolean
+  is_active           boolean
+  effective_date      date
+  dw_updated_at       datetime
+
+  Note: "SCD Type 1 — rate changes overwrite. Store actual rate in fact_loan."
+}
+
+Table dw.dim_branch {
+  branch_sk           int         [pk, increment]
+  branch_bk           varchar(20) [not null]
+  branch_code         varchar(10)
+  branch_name         varchar(150) [not null]
+  branch_type         varchar(30)  [note: "SCD2: CABANG_UTAMA/CABANG/POS_PELAYANAN"]
+  branch_tier         varchar(10)  [note: "SCD2: TIER1/TIER2/TIER3"]
+  region_code         varchar(10)  [note: "SCD2 tracked"]
+  region_name         varchar(100) [note: "SCD2 tracked"]
+  area_code           varchar(10)
+  area_name           varchar(100)
+  address             varchar(250) [note: "SCD2 tracked"]
+  kota_kabupaten      varchar(100) [note: "SCD2 tracked"]
+  provinsi            varchar(100)
+  phone               varchar(20)
+  manager_employee_id varchar(20)  [note: "SCD1 - overwrite"]
+  open_date           date
+  is_active           boolean
+  effective_from      date
+  effective_to        date
+  is_current          boolean
+
+  Note: "SCD Type 2 — regional reclassification and tier changes tracked"
+}
+
+Table dw.dim_employee {
+  employee_sk         int         [pk, increment]
+  employee_bk         varchar(20) [unique, not null]
+  nip                 varchar(20)
+  full_name           varchar(150) [not null]
+  job_title           varchar(100) [note: "SCD1 — promotion overwrites"]
+  department          varchar(100)
+  branch_bk           varchar(20)
+  branch_name         varchar(150)
+  join_date           date
+  is_active           boolean
+
+  Note: "SCD Type 1 — job title and department changes overwrite in place"
+}
+
+Table dw.dim_collateral {
+  collateral_sk       int         [pk, increment]
+  collateral_bk       varchar(30) [unique, not null]
+  collateral_type     varchar(30) [note: "MOTOR/MOBIL/ALAT_BERAT/PROPERTI"]
+  brand               varchar(100)
+  model               varchar(150)
+  manufacture_year    int
+  color               varchar(50)
+  plate_number        varchar(20)
+  chassis_number      varchar(50)
+  engine_number       varchar(50)
+  appraised_value     decimal(18,2) [note: "SCD1 — latest valuation overwrites"]
+  condition_rating    varchar(10)
+  appraised_date      date
+
+  Note: "SCD Type 1 — appraised value and condition updated in place"
+}
+
+Table dw.fact_loan {
+  loan_sk                 bigint      [pk, increment]
+  loan_bk                 varchar(30) [unique, not null, note: "LOS loan ID (degenerate dim)"]
+  customer_sk             int         [ref: > dw.dim_customer.customer_sk]
+  product_sk              int         [ref: > dw.dim_product.product_sk]
+  branch_sk               int         [ref: > dw.dim_branch.branch_sk]
+  employee_sk             int         [ref: > dw.dim_employee.employee_sk]
+  collateral_sk           int         [ref: > dw.dim_collateral.collateral_sk]
+  application_date_sk     int         [ref: > dw.dim_date.date_sk]
+  approval_date_sk        int         [ref: > dw.dim_date.date_sk]
+  disbursement_date_sk    int         [ref: > dw.dim_date.date_sk]
+  loan_status             varchar(20) [note: "PENDING/APPROVED/REJECTED/DISBURSED/CLOSED"]
+  requested_amount        decimal(18,2)
+  approved_amount         decimal(18,2)
+  disbursed_amount        decimal(18,2)
+  admin_fee               decimal(18,2)
+  insurance_fee           decimal(18,2)
+  total_payable           decimal(18,2)
+  monthly_installment     decimal(18,2)
+  tenor_months            int
+  interest_rate           decimal(8,4) [note: "Actual rate applied — stored here for historical accuracy"]
+  total_interest_amount   decimal(18,2) [note: "Computed: total_payable - disbursed_amount"]
+  approval_days           int          [note: "Computed: days from application to approval"]
+  dw_created_at           datetime
+  dw_updated_at           datetime
+
+  Note: "Grain: one row per loan application. Approved/disbursed facts populated on status change."
+}
+
+Table dw.fact_payment {
+  payment_sk              bigint      [pk, increment]
+  payment_bk              varchar(30) [unique, not null]
+  loan_sk                 bigint      [ref: > dw.fact_loan.loan_sk]
+  customer_sk             int         [ref: > dw.dim_customer.customer_sk]
+  branch_sk               int         [ref: > dw.dim_branch.branch_sk]
+  due_date_sk             int         [ref: > dw.dim_date.date_sk]
+  payment_date_sk         int         [ref: > dw.dim_date.date_sk, note: "0 if not yet paid"]
+  installment_number      int
+  payment_status          varchar(20) [note: "PAID/PARTIAL/OVERDUE/WAIVED"]
+  payment_method          varchar(30)
+  payment_channel         varchar(50)
+  scheduled_amount        decimal(18,2)
+  paid_amount             decimal(18,2)
+  penalty_amount          decimal(18,2)
+  waiver_amount           decimal(18,2)
+  shortfall_amount        decimal(18,2) [note: "Computed: scheduled - paid"]
+  dpd                     int          [note: "Days Past Due at payment date"]
+  collectibility_grade    int          [note: "1=Lancar, 2=DPK, 3=KL, 4=Diragukan, 5=Macet"]
+  collectibility_label    varchar(50)
+  collector_employee_id   varchar(20)
+  dw_created_at           datetime
+  dw_updated_at           datetime
+
+  Note: "Grain: one row per installment schedule line. Updated when payment received."
+}
